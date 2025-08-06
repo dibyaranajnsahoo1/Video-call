@@ -1,0 +1,49 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f0f2f5;
+}
+.app {
+  padding: 20px;
+}
+.chat {
+  margin-top: 20px;
+  background: white;
+  padding: 10px;
+  border-radius: 8px;
+}
+.chat-header {
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+.messages {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.message {
+  padding: 5px;
+  margin: 5px 0;
+  border-radius: 5px;
+  background: #eee;
+}
+.message.own {
+  text-align: right;
+  background: #dcf8c6;
+}
+.input-area {
+  display: flex;
+}
+.input-area input {
+  flex: 1;
+  padding: 8px;
+}
+.input-area button {
+  padding: 8px 16px;
+}
+.local-video, .remote-video {
+  width: 45%;
+  height: 200px;
+  margin: 10px;
+  background: black;
+}
