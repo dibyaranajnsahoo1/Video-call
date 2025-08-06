@@ -5,7 +5,6 @@ import "./App.css";
 
 const socket = io("https://video-call-aayx.onrender.com", {
   transports: ["websocket"],
-  secure: true,
 });
 
 function App() {
@@ -41,10 +40,13 @@ function App() {
       if (myVideo.current) myVideo.current.srcObject = stream;
     });
 
-    socket.on("receive-message", (data) => {
-      new Audio("/notification.mp3").play();
-      setMessages((prev) => [...prev, data]);
-    });
+socket.on("receive-message", ({ from, message }) => {
+  if (message && from) {
+    setMessages((prev) => [...prev, { from, message }]);
+    new Audio("/notification.mp3").play();
+  }
+});
+
 
     socket.on("typing", () => {
       setIsTyping(true);
@@ -71,13 +73,8 @@ function App() {
     chatRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = () => {
-    if (message.trim()) {
-      socket.emit("send-message", { message, to: partnerID });
-      setMessages((prev) => [...prev, { from: "me", message }]);
-      setMessage("");
-    }
-  };
+
+
 
   const handleTyping = () => {
     socket.emit("typing", partnerID);
@@ -90,7 +87,7 @@ function App() {
     reader.onload = () => {
       const fileMsg = `<a href="${reader.result}" download="${file.name}" target="_blank">📁 ${file.name}</a>`;
       socket.emit("send-message", { message: fileMsg, to: partnerID });
-      setMessages((prev) => [...prev, { from: "me", message: `📁 ${file.name}` }]);
+      setMessages((prev) => [...prev, { from: socket.id, message: fileMsg }]);
     };
     reader.readAsDataURL(file);
   };
@@ -132,16 +129,41 @@ function App() {
   };
 
   const toggleCamera = () => {
-    const videoTrack = stream.getVideoTracks()[0];
-    videoTrack.enabled = !cameraEnabled;
-    setCameraEnabled(!cameraEnabled);
+    const videoTrack = stream?.getVideoTracks()[0];
+    if (videoTrack) {
+      videoTrack.enabled = !cameraEnabled;
+      setCameraEnabled(videoTrack.enabled);
+    }
   };
 
-  const toggleAudio = () => {
-    const audioTrack = stream.getAudioTracks()[0];
-    audioTrack.enabled = !micEnabled;
-    setMicEnabled(!micEnabled);
-  };
+const toggleAudio = () => {
+  if (!stream) return;
+  const audioTrack = stream.getAudioTracks()[0];
+  if (!audioTrack) return;
+
+  audioTrack.enabled = !audioTrack.enabled;
+  setMicEnabled(audioTrack.enabled);
+
+  if (connectionRef.current && connectionRef.current._pc) {
+    const sender = connectionRef.current._pc.getSenders().find(s => s.track?.kind === 'audio');
+    if (sender) {
+      sender.replaceTrack(audioTrack);
+    }
+  }
+};
+
+const sendMessage = () => {
+  if (message.trim() && partnerID) {
+    const msgObj = { from: yourID, message };
+    socket.emit("send-message", { ...msgObj, to: partnerID });
+    setMessages((prev) => [...prev, msgObj]);
+    setMessage("");
+  }
+};
+
+
+
+
 
   const takeScreenshot = () => {
     const video = myVideo.current;
@@ -156,16 +178,6 @@ function App() {
     a.click();
   };
 
-  const toggleFullscreen = (videoRef) => {
-    if (videoRef.current) {
-      if (document.fullscreenElement) {
-        document.exitFullscreen();
-      } else {
-        videoRef.current.requestFullscreen();
-      }
-    }
-  };
-
   return (
     <div className="app">
       <div className="header">
@@ -176,9 +188,9 @@ function App() {
 
       <div className="chat-box">
         <div className="video-section">
-          <video playsInline muted ref={myVideo} autoPlay className="video" onClick={() => toggleFullscreen(myVideo)} />
+          <video playsInline muted ref={myVideo} autoPlay className="video" />
           {callAccepted && !callEnded && (
-            <video playsInline ref={userVideo} autoPlay className="video" onClick={() => toggleFullscreen(userVideo)} />
+            <video playsInline ref={userVideo} autoPlay className="video" />
           )}
         </div>
 
@@ -198,9 +210,9 @@ function App() {
 
           <div className="chat">
             {messages.map((msg, i) => (
-              <p key={i} className={msg.from === "me" ? "msg-me" : "msg-partner"}
+              <p key={i} className={msg.from === yourID ? "msg-me" : "msg-partner"}
                 data-time={new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}>
-                <b>{msg.from === "me" ? "You" : "Partner"}</b>: <span dangerouslySetInnerHTML={{ __html: msg.message }} />
+                <b>{msg.from === yourID ? "You" : "Partner"}</b>: <span dangerouslySetInnerHTML={{ __html: msg.message }} />
               </p>
             ))}
             {isTyping && <p className="msg-partner">✍️ Partner is typing...</p>}

@@ -18,17 +18,22 @@ const PORT = process.env.PORT || 5000;
 let connectedUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log(`🔌 New user connected: ${socket.id}`);
+  console.log(`🔌 Connected: ${socket.id}`);
   connectedUsers.set(socket.id, socket);
-
   io.emit("online-users", Array.from(connectedUsers.keys()));
 
   socket.on("send-message", ({ message, to }) => {
-    io.to(to).emit("receive-message", { from: socket.id, message });
+    if (connectedUsers.has(to)) {
+      io.to(to).emit("receive-message", { from: socket.id, message });
+    } else {
+      console.warn(`⚠️ User ${to} not found.`);
+    }
   });
 
   socket.on("typing", (to) => {
-    io.to(to).emit("typing");
+    if (connectedUsers.has(to)) {
+      io.to(to).emit("typing");
+    }
   });
 
   socket.on("call-user", ({ signalData, to }) => {
@@ -40,12 +45,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ User disconnected: ${socket.id}`);
+    console.log(`❌ Disconnected: ${socket.id}`);
     connectedUsers.delete(socket.id);
     io.emit("online-users", Array.from(connectedUsers.keys()));
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
