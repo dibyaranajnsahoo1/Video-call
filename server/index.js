@@ -55,12 +55,27 @@
 //   console.log(`🚀 Server running on port ${PORT}`);
 // });
 
-const userMap = new Map(); // username => socket.id
+const io = require("socket.io")(3000, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+const userMap = new Map();        // username => socket.id
+const reverseMap = new Map();     // socket.id => username
+
+const sendOnlineUsers = () => {
+  const onlineUsers = [...userMap.keys()];
+  io.emit("online-users", onlineUsers);
+};
 
 io.on("connection", (socket) => {
   socket.on("set-username", (username) => {
     userMap.set(username, socket.id);
+    reverseMap.set(socket.id, username);
     console.log(`${username} connected as ${socket.id}`);
+    sendOnlineUsers();
   });
 
   socket.on("call-user", ({ to, signalData, from }) => {
@@ -88,6 +103,16 @@ io.on("connection", (socket) => {
     const userSocket = userMap.get(to);
     if (userSocket) {
       io.to(userSocket).emit("typing");
+    }
+  });
+
+  socket.on("disconnect", () => {
+    const username = reverseMap.get(socket.id);
+    if (username) {
+      userMap.delete(username);
+      reverseMap.delete(socket.id);
+      console.log(`${username} disconnected`);
+      sendOnlineUsers();
     }
   });
 });
