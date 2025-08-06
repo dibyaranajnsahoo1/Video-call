@@ -3,13 +3,16 @@ import io from "socket.io-client";
 import Peer from "simple-peer";
 import "./App.css";
 
-const socket = io("https://video-call-aayx.onrender.com");
+const socket = io("https://video-call-aayx.onrender.com", {
+  transports: ["websocket"],
+  secure: true,
+});
 
 function App() {
   const [yourID, setYourID] = useState("");
+  const [partnerID, setPartnerID] = useState("");
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [partnerID, setPartnerID] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [file, setFile] = useState(null);
@@ -29,7 +32,9 @@ function App() {
   const chatRef = useRef();
 
   useEffect(() => {
-    socket.on("connect", () => setYourID(socket.id));
+    socket.on("connect", () => {
+      setYourID(socket.id);
+    });
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
       setStream(stream);
@@ -38,7 +43,7 @@ function App() {
 
     socket.on("receive-message", (data) => {
       new Audio("/notification.mp3").play();
-      setMessages((msgs) => [...msgs, data]);
+      setMessages((prev) => [...prev, data]);
     });
 
     socket.on("typing", () => {
@@ -50,6 +55,11 @@ function App() {
       setReceivingCall(true);
       setCaller(data.from);
       setCallerSignal(data.signal);
+    });
+
+    socket.on("call-accepted", (signal) => {
+      setCallAccepted(true);
+      connectionRef.current.signal(signal);
     });
 
     socket.on("online-users", (users) => {
@@ -64,7 +74,7 @@ function App() {
   const sendMessage = () => {
     if (message.trim()) {
       socket.emit("send-message", { message, to: partnerID });
-      setMessages((msgs) => [...msgs, { from: "me", message }]);
+      setMessages((prev) => [...prev, { from: "me", message }]);
       setMessage("");
     }
   };
@@ -78,11 +88,9 @@ function App() {
     setFile(file);
     const reader = new FileReader();
     reader.onload = () => {
-      socket.emit("send-message", {
-        message: `<a href="${reader.result}" download="${file.name}" target="_blank">📁 ${file.name}</a>`,
-        to: partnerID,
-      });
-      setMessages((msgs) => [...msgs, { from: "me", message: `📁 ${file.name}` }]);
+      const fileMsg = `<a href="${reader.result}" download="${file.name}" target="_blank">📁 ${file.name}</a>`;
+      socket.emit("send-message", { message: fileMsg, to: partnerID });
+      setMessages((prev) => [...prev, { from: "me", message: `📁 ${file.name}` }]);
     };
     reader.readAsDataURL(file);
   };
@@ -96,11 +104,6 @@ function App() {
 
     peer.on("stream", (remoteStream) => {
       if (userVideo.current) userVideo.current.srcObject = remoteStream;
-    });
-
-    socket.on("call-accepted", (signal) => {
-      setCallAccepted(true);
-      peer.signal(signal);
     });
 
     connectionRef.current = peer;
@@ -180,11 +183,7 @@ function App() {
         </div>
 
         <div className="controls">
-          <input
-            placeholder="Partner Socket ID"
-            value={partnerID}
-            onChange={(e) => setPartnerID(e.target.value)}
-          />
+          <input placeholder="Partner Socket ID" value={partnerID} onChange={(e) => setPartnerID(e.target.value)} />
           <button onClick={callUser}>📞 Call</button>
           <button onClick={toggleCamera}>{cameraEnabled ? "🙈 Cam Off" : "📷 Cam On"}</button>
           <button onClick={toggleAudio}>{micEnabled ? "🔇 Mic Off" : "🎙️ Mic On"}</button>
@@ -193,19 +192,14 @@ function App() {
         </div>
 
         <div className="messages">
-          <input
-            placeholder="Type your message..."
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={handleTyping}
-          />
+          <input placeholder="Type your message..." value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={handleTyping} />
           <button onClick={sendMessage}>📨 Send</button>
           <input type="file" onChange={handleFileChange} />
 
           <div className="chat">
             {messages.map((msg, i) => (
               <p key={i} className={msg.from === "me" ? "msg-me" : "msg-partner"}
-                 data-time={new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}>
+                data-time={new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}>
                 <b>{msg.from === "me" ? "You" : "Partner"}</b>: <span dangerouslySetInnerHTML={{ __html: msg.message }} />
               </p>
             ))}
