@@ -1,11 +1,10 @@
+// Optimized and fixed React App.js
 import React, { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 import Peer from "simple-peer";
 import "./App.css";
 
-const socket = io("https://video-call-aayx.onrender.com", {
-  transports: ["websocket"],
-});
+const socket = io("https://video-call-aayx.onrender.com", { transports: ["websocket"] });
 
 function App() {
   const [yourID, setYourID] = useState("");
@@ -31,22 +30,19 @@ function App() {
   const chatRef = useRef();
 
   useEffect(() => {
-    socket.on("connect", () => {
-      setYourID(socket.id);
-    });
+    socket.on("connect", () => setYourID(socket.id));
 
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
       setStream(stream);
       if (myVideo.current) myVideo.current.srcObject = stream;
     });
 
-socket.on("receive-message", ({ from, message }) => {
-  if (message && from) {
-    setMessages((prev) => [...prev, { from, message }]);
-    new Audio("/notification.mp3").play();
-  }
-});
-
+    socket.on("receive-message", ({ from, message }) => {
+      if (message && from) {
+        setMessages((prev) => [...prev, { from, message }]);
+        new Audio("/notification.mp3").play();
+      }
+    });
 
     socket.on("typing", () => {
       setIsTyping(true);
@@ -61,27 +57,21 @@ socket.on("receive-message", ({ from, message }) => {
 
     socket.on("call-accepted", (signal) => {
       setCallAccepted(true);
-      connectionRef.current.signal(signal);
+      connectionRef.current?.signal(signal);
     });
 
-    socket.on("online-users", (users) => {
-      setOnlineUsers(users);
-    });
+    socket.on("online-users", (users) => setOnlineUsers(users));
   }, []);
 
   useEffect(() => {
     chatRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
-
-
-  const handleTyping = () => {
-    socket.emit("typing", partnerID);
-  };
+  const handleTyping = () => socket.emit("typing", partnerID);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
+    if (!file) return;
     setFile(file);
     const reader = new FileReader();
     reader.onload = () => {
@@ -94,30 +84,16 @@ socket.on("receive-message", ({ from, message }) => {
 
   const callUser = () => {
     const peer = new Peer({ initiator: true, trickle: false, stream });
-
-    peer.on("signal", (data) => {
-      socket.emit("call-user", { signalData: data, to: partnerID });
-    });
-
-    peer.on("stream", (remoteStream) => {
-      if (userVideo.current) userVideo.current.srcObject = remoteStream;
-    });
-
+    peer.on("signal", (data) => socket.emit("call-user", { signalData: data, to: partnerID }));
+    peer.on("stream", (remoteStream) => userVideo.current.srcObject = remoteStream);
     connectionRef.current = peer;
   };
 
   const acceptCall = () => {
     setCallAccepted(true);
     const peer = new Peer({ initiator: false, trickle: false, stream });
-
-    peer.on("signal", (data) => {
-      socket.emit("accept-call", { signal: data, to: caller });
-    });
-
-    peer.on("stream", (remoteStream) => {
-      userVideo.current.srcObject = remoteStream;
-    });
-
+    peer.on("signal", (data) => socket.emit("accept-call", { signal: data, to: caller }));
+    peer.on("stream", (remoteStream) => userVideo.current.srcObject = remoteStream);
     peer.signal(callerSignal);
     connectionRef.current = peer;
   };
@@ -125,48 +101,43 @@ socket.on("receive-message", ({ from, message }) => {
   const leaveCall = () => {
     setCallEnded(true);
     connectionRef.current?.destroy();
+    setCallAccepted(false);
+    setReceivingCall(false);
+    setCaller("");
+    setCallerSignal(null);
+    setPartnerID("");
+    setMessages([]);
     window.location.reload();
   };
 
   const toggleCamera = () => {
     const videoTrack = stream?.getVideoTracks()[0];
     if (videoTrack) {
-      videoTrack.enabled = !cameraEnabled;
+      videoTrack.enabled = !videoTrack.enabled;
       setCameraEnabled(videoTrack.enabled);
     }
   };
 
-const toggleAudio = () => {
-  if (!stream) return;
-  const audioTrack = stream.getAudioTracks()[0];
-  if (!audioTrack) return;
-
-  audioTrack.enabled = !audioTrack.enabled;
-  setMicEnabled(audioTrack.enabled);
-
-  if (connectionRef.current && connectionRef.current._pc) {
-    const sender = connectionRef.current._pc.getSenders().find(s => s.track?.kind === 'audio');
-    if (sender) {
-      sender.replaceTrack(audioTrack);
+  const toggleAudio = () => {
+    const audioTrack = stream?.getAudioTracks()[0];
+    if (audioTrack) {
+      audioTrack.enabled = !audioTrack.enabled;
+      setMicEnabled(audioTrack.enabled);
     }
-  }
-};
+  };
 
-const sendMessage = () => {
-  if (message.trim() && partnerID) {
-    const msgObj = { from: yourID, message };
-    socket.emit("send-message", { ...msgObj, to: partnerID });
-    setMessages((prev) => [...prev, msgObj]);
-    setMessage("");
-  }
-};
-
-
-
-
+  const sendMessage = () => {
+    if (message.trim() && partnerID) {
+      const msgObj = { from: yourID, message };
+      socket.emit("send-message", { ...msgObj, to: partnerID });
+      setMessages((prev) => [...prev, msgObj]);
+      setMessage("");
+    }
+  };
 
   const takeScreenshot = () => {
     const video = myVideo.current;
+    if (!video) return;
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
