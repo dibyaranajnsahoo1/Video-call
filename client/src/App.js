@@ -1,4 +1,4 @@
-// Optimized and fixed React App.js
+// Optimized and fixed React App.js with camera switch and fullscreen toggle
 import React, { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 import Peer from "simple-peer";
@@ -23,6 +23,8 @@ function App() {
   const [callEnded, setCallEnded] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [micEnabled, setMicEnabled] = useState(true);
+  const [currentFacingMode, setCurrentFacingMode] = useState("user");
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
 
   const myVideo = useRef();
   const userVideo = useRef();
@@ -31,11 +33,7 @@ function App() {
 
   useEffect(() => {
     socket.on("connect", () => setYourID(socket.id));
-
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-      setStream(stream);
-      if (myVideo.current) myVideo.current.srcObject = stream;
-    });
+    getMedia(currentFacingMode);
 
     socket.on("receive-message", ({ from, message }) => {
       if (message && from) {
@@ -61,11 +59,23 @@ function App() {
     });
 
     socket.on("online-users", (users) => setOnlineUsers(users));
-  }, []);
+  }, [currentFacingMode]);
 
   useEffect(() => {
     chatRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const getMedia = (facingMode) => {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode }, audio: true }).then((newStream) => {
+      if (myVideo.current) myVideo.current.srcObject = newStream;
+      setStream(newStream);
+    });
+  };
+
+  const switchCamera = () => {
+    const newFacingMode = currentFacingMode === "user" ? "environment" : "user";
+    setCurrentFacingMode(newFacingMode);
+  };
 
   const handleTyping = () => socket.emit("typing", partnerID);
 
@@ -149,6 +159,10 @@ function App() {
     a.click();
   };
 
+  const toggleFullscreen = (ref) => {
+    setFullscreenVideo(fullscreenVideo === ref ? null : ref);
+  };
+
   return (
     <div className="app">
       <div className="header">
@@ -157,11 +171,27 @@ function App() {
         <span>🟢 Online: {onlineUsers.length}</span>
       </div>
 
-      <div className="chat-box">
+      <div className={`chat-box ${fullscreenVideo ? "fullscreen" : ""}`}>
         <div className="video-section">
-          <video playsInline muted ref={myVideo} autoPlay className="video" />
+          <video
+            playsInline
+            muted
+            ref={myVideo}
+            autoPlay
+            className={`video ${fullscreenVideo === myVideo ? "fullscreen-video" : ""}`}
+            onClick={() => toggleFullscreen(myVideo)}
+          />
           {callAccepted && !callEnded && (
-            <video playsInline ref={userVideo} autoPlay className="video" />
+            <video
+              playsInline
+              ref={userVideo}
+              autoPlay
+              className={`video ${fullscreenVideo === userVideo ? "fullscreen-video" : ""}`}
+              onClick={() => toggleFullscreen(userVideo)}
+            />
+          )}
+          {fullscreenVideo && (
+            <button className="exit-fullscreen" onClick={() => setFullscreenVideo(null)}>❌</button>
           )}
         </div>
 
@@ -170,6 +200,7 @@ function App() {
           <button onClick={callUser}>📞 Call</button>
           <button onClick={toggleCamera}>{cameraEnabled ? "🙈 Cam Off" : "📷 Cam On"}</button>
           <button onClick={toggleAudio}>{micEnabled ? "🔇 Mic Off" : "🎙️ Mic On"}</button>
+          <button onClick={switchCamera}>🔄 Switch Camera</button>
           <button onClick={takeScreenshot}>📸 Screenshot</button>
           <button onClick={leaveCall} className="end-call">❌ End</button>
         </div>
